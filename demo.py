@@ -14,6 +14,35 @@
 from sdfide import ide
 from sdf import *
 
+@op3
+def mirror2(other, offset):
+    def f(p):
+        return other(offset - p)
+    return f
+
+@op3
+def mirror3(other, axis):
+    def f(p):
+        p *= (1,1,-1)
+        return other.orient(axis)(p)
+    return orient(f, axis)
+
+def _normalize(a):
+    return a / np.linalg.norm(a)
+
+@op3
+def mirror(other, point=ORIGIN, normal=UP ):
+    x, y, z = _normalize(normal)
+    
+    matrix = np.array([
+        [1-2*x*x,  -2*x*y,  -2*x*z],
+        [ -2*x*y, 1-2*y*y,  -2*y*z],
+        [ -2*x*z,  -2*y*z, 1-2*z*z],
+    ]).T
+    def f(p):
+        return other(np.dot(p-point, matrix) + point)
+    return f
+  
 def sample():
   f = sphere(1.1) & box(1.7)
   c = cylinder(0.5)
@@ -65,5 +94,27 @@ def weave():
   f |= (cylinder(12) - cylinder(10)) & slab(z0=-0.5, z1=0.5).k(0.25)
   return f
 
-ide.showsdf(knurling())
+def gearlike2(n=0.1):
+  f = sphere(2) & slab(z0=-0.5, z1=0.5).k(n)
+  f -= cylinder(1).k(n)
+  f -= cylinder(0.25).circular_array(16, 2).k(n)
+  return f
 
+@sdf3
+def sines(scale=1, amplitude=1):
+  def f(p):
+    x, y, z =  p[:,0], p[:,1], p[:,2]
+    return np.sin(scale*x)*np.sin(scale*y)*np.sin(scale*z)*amplitude
+  return f
+
+g = gearlike2(0.001).twist(0.3)
+g |= g.mirror(point=Z*0.6, normal=Z).rotate(2*pi*1/16/2)
+herring = g | capped_cylinder(-Z*0.5, Z*1.5, 1.5).k(0.1) - cylinder(1).k(0.1)
+
+bumpy = sphere(2).blend(sines(scale=6, amplitude=0.1))
+
+bumpyherring = herring.blend(sines(scale=6, amplitude=0.1))
+
+ide.showsdf( sample(), samples=2**24 )
+
+#weave().save('out.stl', samples=2**20)
